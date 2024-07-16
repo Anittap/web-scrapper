@@ -124,36 +124,85 @@ def get_info(tender_number):
     soup = BeautifulSoup(response.json().get('summary'), 'html.parser')
     info_blocks = soup.find_all('div', class_='sublevel__content')
     tender_info['Link'] = f'https://ted.europa.eu/en/notice/-/detail/{tender_number}'
-    for info_block in info_blocks:
-        if re.findall(date_regex, info_block.text):
-            tender_info['Date'] = re.findall(date_regex, info_block.text)[0]
-        if 'Name(s) and address(es) of the winner' in info_block.text:
-            winner_address = ''
-            if re.findall(winner_name_regex, info_block.text):
-                tender_info['Winner name'] = re.findall(winner_name_regex, info_block.text)[0]
-            if re.findall(winner_website_regex, info_block.text):
-                tender_info['Winner website'] = re.findall(winner_website_regex, info_block.text)[0]
-            if re.findall(address_regex, info_block.text):
-                winner_address += re.findall(address_regex, info_block.text)[0] + ', '
-            if re.findall(postal_code_regex, info_block.text):
-                winner_address += re.findall(postal_code_regex, info_block.text)[0] + ', '
-            if re.findall(town_regex, info_block.text):
-                winner_address += re.findall(town_regex, info_block.text)[0]
-            if re.findall(winner_email_regex, info_block.text):
-                tender_info['Winner email'] = re.findall(winner_email_regex, info_block.text)[0]
-            tender_info['Winner address'] = winner_address
-        elif 'Name and addresses' in info_block.text:
-            if re.findall(buyer_name_regex, info_block.text):
-                tender_info['Buyer name'] = re.findall(buyer_name_regex, info_block.text)[0]
-            if re.findall(buyer_address_regex, info_block.text):
-                tender_info['Buyer address'] = re.findall(buyer_address_regex, info_block.text)[0]
-            if re.findall(buyer_town_regex, info_block.text):
-                tender_info['Buyer town'] = re.findall(buyer_town_regex, info_block.text)[0]
-        elif 'Title' in info_block.text:
-            text = info_block.getText().replace('Title', '').strip()
-            output_string = re.sub(r'\n\s*\n', '\n', text.strip(), flags=re.MULTILINE)
-            tender_info['Description'] = output_string
+    if len(info_blocks) != 0:
+        for info_block in info_blocks:
+            if re.findall(date_regex, info_block.text):
+                tender_info['Date'] = re.findall(date_regex, info_block.text)[0]
+            if 'Name(s) and address(es) of the winner' in info_block.text:
+                winner_address = ''
+                if re.findall(winner_name_regex, info_block.text):
+                    tender_info['Winner name'] = re.findall(winner_name_regex, info_block.text)[0]
+                if re.findall(winner_website_regex, info_block.text):
+                    tender_info['Winner website'] = re.findall(winner_website_regex, info_block.text)[0]
+                if re.findall(address_regex, info_block.text):
+                    winner_address += re.findall(address_regex, info_block.text)[0] + ', '
+                if re.findall(postal_code_regex, info_block.text):
+                    winner_address += re.findall(postal_code_regex, info_block.text)[0] + ', '
+                if re.findall(town_regex, info_block.text):
+                    winner_address += re.findall(town_regex, info_block.text)[0]
+                if re.findall(winner_email_regex, info_block.text):
+                    tender_info['Winner email'] = re.findall(winner_email_regex, info_block.text)[0]
+                tender_info['Winner address'] = winner_address
+            elif 'Name and addresses' in info_block.text:
+                if re.findall(buyer_name_regex, info_block.text):
+                    tender_info['Buyer name'] = re.findall(buyer_name_regex, info_block.text)[0]
+                if re.findall(buyer_address_regex, info_block.text):
+                    tender_info['Buyer address'] = re.findall(buyer_address_regex, info_block.text)[0]
+                if re.findall(buyer_town_regex, info_block.text):
+                    tender_info['Buyer town'] = re.findall(buyer_town_regex, info_block.text)[0]
+            elif 'Title' in info_block.text:
+                text = info_block.getText().replace('Title', '').strip()
+                output_string = re.sub(r'\n\s*\n', '\n', text.strip(), flags=re.MULTILINE)
+                tender_info['Description'] = output_string
+    else:
+        soup = BeautifulSoup(response.json().get('noticeAsHtml'), 'html.parser')
+        info_blocks = soup.find_all('div', class_='section-content')
+        info_blocks.extend(soup.find_all('div', class_='subsection-content'))
+        tender_info['Link'] = f'https://ted.europa.eu/en/notice/-/detail/{tender_number}'
+        winner_address = ''
+        for info_block in info_blocks:
+            sublevel_content = info_block.find('div', class_='sublevel__content')
+            if not sublevel_content:
+                continue
+            if 'Publication information' == sublevel_content.text.strip():
+                tender_info['Date'] = \
+                    info_block.find('span', {'data-labels-key': 'business-term|name|OPP-012'}).find_next_siblings(
+                        'span')[
+                        1].text
+            elif 'Procedure' == sublevel_content.text.strip():
+                tender_info['Description'] = info_block.find('span', {'data-labels-key': 'field|name|BT-21-Procedure'}).find_next_siblings('span')[1].text
+            elif 'Buyer' == sublevel_content.text.strip():
+                tender_info['Buyer name'] = info_block.find('span', {'data-labels-key': 'field|name|BT-500-Organization-Company'}).find_next_siblings('span')[1].text
+            elif 'Information about winners' == sublevel_content.text.strip():
+                tender_info['Winner name'] = info_block.find('span', {'data-labels-key': 'field|name|BT-500-Organization-Company'}).find_next_siblings('span')[1].text
+        for info_block in info_blocks:
+            sublevel_content = info_block.find('div', class_='sublevel__content')
+            if not sublevel_content:
+                continue
+            if 'ORG-000' in sublevel_content.text.strip():
+                if tender_info.get('Winner name'):
+                    if info_block.find('span', {'data-labels-key': 'field|name|BT-500-Organization-Company'}).find_next_siblings('span')[1].text == tender_info.get('Winner name'):
 
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-506'}):
+                            tender_info['Winner email'] = info_block.find('span', {'data-labels-key': 'business-term|name|BT-506'}).find_next_siblings('span')[1].text
+                        # tender_info['Winner address'] = info_block.find('span', {'data-labels-key': 'business-term|name|BT-510'}).find_next_siblings('span')[1].text
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-505'}):
+                            tender_info['Winner website'] = info_block.find('span', {'data-labels-key': 'business-term|name|BT-505'}).find_next_siblings('span')[1].text
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-510'}):
+                            winner_address+=info_block.find('span', {'data-labels-key': 'business-term|name|BT-510'}).find_next_siblings('span')[1].text + ', '
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-512'}):
+                            winner_address+=info_block.find('span', {'data-labels-key': 'business-term|name|BT-512'}).find_next_siblings('span')[1].text + ', '
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-513'}):
+                            winner_address+=info_block.find('span', {'data-labels-key': 'business-term|name|BT-513'}).find_next_siblings('span')[1].text
+
+                if tender_info.get('Buyer name'):
+                    if info_block.find('span', {'data-labels-key': 'field|name|BT-500-Organization-Company'}).find_next_siblings('span')[1].text == tender_info.get('Buyer name'):
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-510'}):
+                            tender_info['Buyer address']= info_block.find('span', {'data-labels-key': 'business-term|name|BT-510'}).find_next_siblings('span')[1].text
+                        if info_block.find('span', {'data-labels-key': 'business-term|name|BT-513'}):
+                            tender_info['Buyer town'] = info_block.find('span', {'data-labels-key': 'business-term|name|BT-513'}).find_next_siblings('span')[1].text
+        if winner_address:
+            tender_info['Winner address'] = winner_address
     print(tender_info)
     return tender_info
 
@@ -171,4 +220,3 @@ if __name__ == '__main__':
         df.loc[counter] = get_info(tender_number)
         counter += 1
     df.to_excel('tenders.xlsx', index=False)
-
